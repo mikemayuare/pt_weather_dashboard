@@ -1,5 +1,5 @@
 # A Portugal weather dashboard
-A Dash dashboard for Portugal current date weather made with plotly and dash.
+A Dash dashboard for Portugal past 24h weather made with plotly and dash.
 
 install requirements:
 ``pip install requirements.txt``
