@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import plotly.express as px
 from dash import Dash, html, dcc, Input, Output, ctx
 import dash_bootstrap_components as dbc
@@ -6,6 +7,7 @@ from dash_bootstrap_templates import load_figure_template
 import dash_extensions as de
 from datetime import datetime
 import requests
+import math
 
 # set the style
 
@@ -27,28 +29,35 @@ metrics = [
 observations_url = (
     "https://api.ipma.pt/open-data/observation/meteorology/stations/observations.json"
 )
+geojson = (
+    "https://api.ipma.pt/open-data/observation/meteorology/stations/obs-surface.geojson"
+)
 
 
 # check if there are missing values (-99) means no data
 def check_nodata(X):
-    return [0 if x == -99 else x for x in X]
+    return [X.median() if x == -99 else x for x in X]
 
 
 # Set wind directions as recognizable strings
-def get_direction(id):
-    direction_map = {
-        None: "",
-        0: "without direction",
-        1: "N",
-        2: "NE",
-        3: "E",
-        4: "SE",
-        5: "S",
-        6: "SW",
-        7: "W",
-        9: "N",
-    }
-    return direction_map.get(id)
+# def get_direction(id):
+#     direction_map = {
+#         "None": "",
+#         0: "without direction",
+#         1: "N",
+#         2: "NE",
+#         3: "E",
+#         4: "SE",
+#         5: "S",
+#         6: "SW",
+#         7: "W",
+#         9: "N",
+#     }
+#     response = direction_map.get(id)
+#     if response:
+#         return response
+#     else:
+#         return ""
 
 
 # build the dataframe from IPMA API
@@ -63,8 +72,9 @@ def get_stations_metrics():
     obs_df["humidade"] = obs_df["humidade"].astype("float")
     obs_df = obs_df.merge(stations, on="id")
     obs_df[metrics] = obs_df[metrics].apply(check_nodata)
-    obs_df["idDireccVento"] = obs_df["idDireccVento"].apply(get_direction)
+    # obs_df["idDireccVento"] = obs_df["idDireccVento"].apply(get_direction)
     obs_df["temperatura"] = obs_df["temperatura"].apply(lambda x: round(x, 0))
+    obs_df.sort_values("date", inplace=True)
     return obs_df
 
 
@@ -254,31 +264,30 @@ def update_barplot(value, n):
     return fig
 
 
-# # update dataframe
-# @app.callback(Output("temp-bar", "figure"), [Input("weather_update", "n_intervals")])
-# def bar_plot_update(n):
-#     global obs_df
-#     obs_df = get_stations_metrics()
-#     fig = location(dropdown.__getattribute__("value"))
-#     return fig
-
-
 # updates temperature in the dbc card
 @app.callback(Output("themometer-text", "children"), [Input("dropdown", "value")])
 def update_temperature(value):
     df = obs_df[obs_df["local"] == value]
-    temperature = df[df["date"] == df["date"].max()]["temperatura"].values[0]
-    if temperature == None:
+    temperature = round(df["temperatura"].mean(), 1)
+    maxima = round(df["temperatura"].max(), 1)
+    minima = round(df["temperatura"].min(), 1)
+    values = [
+        html.P(f"Avg: {temperature}°C"),
+        html.P(f"Max: {maxima}°C"),
+        html.P(f"Min: {minima}°C"),
+    ]
+    if math.isnan(temperature):
         return "No data at the moment"
-    return f"{temperature}°C"
+    else:
+        return values
 
 
 # change thermometer image depending of the temperature
 @app.callback(Output("themometer", "url"), [Input("dropdown", "value")])
 def update_temperature(value):
     df = obs_df[obs_df["local"] == value]
-    temperature = df[df["date"] == df["date"].max()]["temperatura"].values[0]
-    if temperature is None:
+    temperature = round(df["temperatura"].mean(), 1)
+    if math.isnan(temperature):
         return termo_hot
     elif temperature > 17:
         return termo_hot
@@ -306,7 +315,7 @@ def update_sensors(value):
                             )
                         ),
                         dbc.Col(
-                            f"{df_max_date['intensidadeVentoKM'].values[0]} km/h {df_max_date['idDireccVento'].values[0]}",
+                            f"{round(df['intensidadeVentoKM'].mean(), 0)} km/h",
                             style=dict(fontSize="2rem"),
                         ),
                     ],
@@ -324,7 +333,7 @@ def update_sensors(value):
                             )
                         ),
                         dbc.Col(
-                            f"{df_max_date['pressao'].values[0]} hPa",
+                            f"{round(df['pressao'].mean(), 0)} hPa",
                             style=dict(fontSize="2rem"),
                         ),
                     ],
